@@ -123,7 +123,45 @@ class OP5(object):
         else:
             return self.create(object_type,data_at_source)
 
-    def validate(self,request_type,object_type,name,data): 
+    # Function to check that all required object properties are set
+    def validate_object(self,request_type,object_type,data):
+        # Sublists denote that either of the values need to be present, but not both
+        required_properties = {}
+        required_properties["default"]           = [["name", object_type+"_name"]];
+        required_properties["graph_template"]    = ["check"];
+        required_properties["hostdependency"]    = ["dependent_host_name", "host_name"];
+        required_properties["hostescalation"]    = ["first_notification", "host_name", "last_notification", "notification_interval"];
+        required_properties["service"]           = [["host_name", "hostgroup_name"], "service_description"];
+        required_properties["servicedependency"] = ["dependent_service", "service"];
+        required_properties["user"]              = ["username", "password"];
+
+        if object_type in required_properties:
+            required_properties_list = required_properties[object_type]
+        else:
+            required_properties_list = required_properties["default"]
+
+        validation_passed = True # "passed" by default
+
+        # Loop through required properties, and break out of loop if validation fails
+        # If requirement is a list, only one of the properties has to exist for the object to be valid
+        for req_prop in required_properties_list:
+            if isinstance(req_prop, list):
+                if not any (sub_req_prop in data for sub_req_prop in req_prop):
+                    validation_passed = False
+                    break
+            else:
+                # Set validation_passed to false if required properties are not found
+                if req_prop not in data:
+                    validation_passed = False
+                    break
+
+        if not validation_passed:
+            print colored("%s(%s): All required properties for a %s object not set in data! data: %s" % (request_type, object_type, object_type, str(data)), "red")
+            return False
+
+        return True
+
+    def validate_request(self,request_type,object_type,name,data):
         if request_type not in ["GET","POST","PATCH","PUT","DELETE"]:
             print colored("%s(%s): Invalid request type! name:'%s' data: %s" % (request_type, object_type, name, str(data) ), "red")
             return False
@@ -143,16 +181,10 @@ class OP5(object):
             if request_type != "POST" and object_type == "service" and name != "" and name.count(";") == 0:
                 print colored("%s(%s): Invalid service name! name:'%s' data: %s" % (request_type, object_type, name, str(data) ), "red")
                 return False
-            if request_type == "POST": #for create, there exists required fields
-                # Fact: ALL variables ending in '_name', must be a unique name.
-                if object_type == "service":
-                    if ("host_name" not in data and "hostgroup_name" not in data) or "service_description" not in data:
-                        print colored("%s(%s): Required identifier variables for a service not set in data! data: %s" % (request_type, object_type, str(data) ), "red")
-                        return False
-                else: #all other object types
-                    if object_type+"_name" not in data and "name" not in data:
-                        print colored("%s(%s): No identifier variable set in data! data: %s" % (request_type, object_type, str(data) ), "red")
-                        return False
+            if request_type == "POST":
+                # Return False if False, otherwise continue
+                if not self.validate_object(request_type, object_type, data):
+                    return False
 
         return True
 
@@ -168,7 +200,7 @@ class OP5(object):
     def operation(self,request_type,object_type,name="",data=None,rdepth=0):
         url = self.api_url + "/config/" + object_type
 
-        if not self.validate(request_type,object_type,name,data):
+        if not self.validate_request(request_type,object_type,name,data):
             return False
 
         # a little extra code here to fix the service name when referring to a hostgroup in the URL
