@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class NullHandler(logging.Handler):
-    """ 
+    """
     For backward-compatibility with Python 2.6, a local class definition
     is used instead of logging.NullHandler
     """
@@ -194,7 +194,7 @@ class OP5(object):
     #name: string
     #data: dictionary
     #RETURNS:
-    #boolean indicating success/failure of operation 
+    #boolean indicating success/failure of operation
     #the response JSON text is loaded into a JSON object and put into self.data
     #the http status code is put into self.status_code
     def operation(self,request_type,object_type,name="",data=None,rdepth=0):
@@ -205,7 +205,7 @@ class OP5(object):
 
         # a little extra code here to fix the service name when referring to a hostgroup in the URL
         if (request_type in ["PATCH","PUT","DELETE"] or (request_type == "GET" and name != "")) and object_type == "service":
-            print "INFO: Checking if the given name is a hostgroup first."    
+            print "INFO: Checking if the given name is a hostgroup first."
             if self.read("hostgroup",name.split(";")[0]):
                 name += "?parent_type=hostgroup"
 
@@ -238,6 +238,9 @@ class OP5(object):
             self.data = json.loads(r.text)
         except ValueError as e:
             self.data = r.text
+            if r.status_code == 509:
+              print colored("ERROR: OP5 internal sanity protections activated. Please wait for a while and try again..","red")
+              return
             #GET can return HTTP 200 OK with "index mismatch", but in any other non-success scenario, we should be receiving JSON, and not HTML
             if r.text.find("index mismatch") != -1 or (r.status_code not in [200,201] and r.headers["content-type"].find("text/html") != -1):
                 raise e
