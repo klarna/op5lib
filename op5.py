@@ -224,7 +224,7 @@ class OP5(object):
         http_headers={'content-type': 'application/json'}
 
         try:
-            r = getattr(requests,request_type.lower()) (url,auth=(self.api_username, self.api_password), verify=False, data=json.dumps(data), headers=http_headers, timeout=10)
+            r = getattr(requests,request_type.lower()) (url,auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10)
         except Exception as e:
             import pprint; pprint.pprint(e)
             return False
