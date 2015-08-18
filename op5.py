@@ -7,7 +7,7 @@ import time
 import sys
 
 import logging
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("op5")
 
 class NullHandler(logging.Handler):
     """
