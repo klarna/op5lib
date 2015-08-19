@@ -239,8 +239,13 @@ class OP5(object):
         except ValueError as e:
             self.data = r.text
             if r.status_code == 509:
-              print colored("ERROR: OP5 internal sanity protections activated. Please wait for a while and try again..","red")
-              return
+              rdepth+=1
+              if rdepth < 3:
+                  print colored("ERROR: OP5 internal sanity protections activated. Waiting for a while before trying again..","red")
+                  time.sleep(6)
+                  return self.operation(request_type,object_type,name,data,rdepth)
+              else:
+                  raise RuntimeError("Bailing out after 3 retries on HTTP 509 OP5 Sanity Protection Error")
             #GET can return HTTP 200 OK with "index mismatch", but in any other non-success scenario, we should be receiving JSON, and not HTML
             if r.text.find("index mismatch") != -1 or (r.status_code not in [200,201] and r.headers["content-type"].find("text/html") != -1):
                 raise e
