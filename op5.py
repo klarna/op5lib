@@ -63,6 +63,9 @@ class OP5(object):
         else: #for any other object type, print out a generic text
             return "%s(%s) data: %s" % (request_type,object_type,data)
 
+    def filter(self,api_type,query):
+        return self.filter_operation(api_type,query)
+
     def create(self,object_type,data_dict):
         return self.operation("POST",object_type,data=data_dict)
 
@@ -186,6 +189,58 @@ class OP5(object):
                 if not self.validate_object(request_type, object_type, data):
                     return False
 
+        return True
+
+    def filter_operation(self, api_type, query, rdepth=0):
+        url = self.api_url + "/filter/" + api_type
+        query = "query="+query.encode("UTF-8")
+
+        if self.debug or self.dryrun:
+            text = "GET" + " " + url
+            text += " Query string: '" + str(query) + "'"
+            print text
+        if self.dryrun:
+            return False
+
+        http_headers = {'content-type': 'application/json'}
+
+        try:
+            r = requests.get(url, auth=(self.api_username, self.api_password), params=query, headers=http_headers, timeout=10)
+        except Exception as e:
+            import pprint; pprint.pprint(e)
+            return False
+
+        if self.debug:
+            print r.status_code
+            print r.text
+            print r.headers
+
+        try:
+            self.data = json.loads(r.text)
+        except ValueError as e:
+            self.data = r.text
+            if r.status_code == 509:
+              print colored("ERROR: OP5 internal sanity protections activated. Please wait for a while and try again..","red")
+              return
+            #GET can return HTTP 200 OK with "index mismatch", but in any other non-success scenario, we should be receiving JSON, and not HTML
+            if r.text.find("index mismatch") != -1 or (r.status_code not in [200,201] and r.headers["content-type"].find("text/html") != -1):
+                raise e
+        self.status_code = r.status_code
+
+        if r.status_code != 200: #200 OK
+            #e.g. 400 Bad request (e.g. required fields not set), 409 Conflict (e.g. something prevents it), 401 Unauthorized, 403 Forbidden, 404 Not Found, 405 Method Not Allowed
+            print colored("GET(filter/%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query), "red")
+            print colored("GET(filter/%s): got HTTP Response: %s" % (api_type, r.text), "red")
+            if self.logtofile:
+                logger.error("GET(filter/%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query))
+                logger.error("GET(filter/%s): got HTTP Response: %s" % (api_type, r.text))
+                logger.debug("%s(%s): HTTP Response headers were: %s" % (request_type, object_type, r.headers) )
+            return False
+
+        if not self.interactive: #in interactive mode, skip the status text for successful requests, so that the JSON output can easily be piped into another command
+            print colored("GET(filter/%s): Query string: '%s'" % (api_type, query), "green")
+        if self.logtofile:
+            logger.info("GET(filter/%s): Query string: '%s'" % (api_type, query))
         return True
 
     #CRUD: create, read, update, delete [, and overwrite]
