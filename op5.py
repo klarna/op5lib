@@ -207,6 +207,7 @@ class OP5(object):
         try:
             r = requests.get(url, auth=(self.api_username, self.api_password), params=query, headers=http_headers, timeout=10)
         except Exception as e:
+            self.data = str(e)
             import pprint; pprint.pprint(e)
             return False
 
@@ -281,6 +282,7 @@ class OP5(object):
         try:
             r = getattr(requests,request_type.lower()) (url,auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10)
         except Exception as e:
+            self.data = str(e)
             import pprint; pprint.pprint(e)
             return False
 
