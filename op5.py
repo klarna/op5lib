@@ -235,7 +235,7 @@ class OP5(object):
             if self.logtofile:
                 logger.error("GET(filter/%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query))
                 logger.error("GET(filter/%s): got HTTP Response: %s" % (api_type, r.text))
-                logger.debug("%s(%s): HTTP Response headers were: %s" % (request_type, object_type, r.headers) )
+                logger.debug("GET(%s): HTTP Response headers were: %s" % (api_type, r.headers) )
             return False
 
         if not self.interactive: #in interactive mode, skip the status text for successful requests, so that the JSON output can easily be piped into another command
