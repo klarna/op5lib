@@ -63,6 +63,9 @@ class OP5(object):
         else: #for any other object type, print out a generic text
             return "%s(%s) data: %s" % (request_type,object_type,data)
 
+    def command(self,command_type,query):
+        return self.command_operation(command_type,query)
+
     def filter(self,api_type,query):
         return self.filter_operation(api_type,query)
 
@@ -191,6 +194,57 @@ class OP5(object):
 
         return True
 
+    def command_operation(self, command_type, data, rdepth=0):
+        url = self.api_url + "/command/" + command_type
+
+        if self.debug or self.dryrun:
+            text = "POST" + " " + url
+            text += " Sent data: " + str(data)
+            print text
+        if self.dryrun:
+            return False
+
+        http_headers = {'content-type': 'application/json'}
+
+        try:
+            r = requests.post(url, auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10)
+        except Exception as e:
+            self.data = str(e)
+            import pprint; pprint.pprint(e)
+            return False
+
+        if self.debug:
+            print r.status_code
+            print r.text
+            print r.headers
+
+        try:
+            self.data = json.loads(r.text)
+        except ValueError as e:
+            self.data = r.text
+            if r.status_code == 509:
+              print colored("ERROR: OP5 internal sanity protections activated. Please wait for a while and try again..","red")
+              return
+            if r.headers["content-type"].find("text/html") != -1:
+                raise e
+        self.status_code = r.status_code
+
+        if r.status_code != 200: #200 OK
+            #e.g. 400 Bad request (e.g. required fields not set), 409 Conflict (e.g. something prevents it), 401 Unauthorized, 403 Forbidden, 404 Not Found, 405 Method Not Allowed
+            print colored("POST(command/%s): got HTTP Status Code %d %s. Sent data: %s" % (command_type, r.status_code, r.reason, str(data)), "red")
+            print colored("POST(command/%s): got HTTP Response: %s" % (command_type, r.text), "red")
+            if self.logtofile:
+                logger.error("POST(command/%s): got HTTP Status Code %d %s. Sent data: %s" % (command_type, r.status_code, r.reason, str(data)))
+                logger.error("POST(command/%s): got HTTP Response: %s" % (command_type, r.text))
+                logger.debug("POST(command/%s): HTTP Response headers were: %s" % (command_type, r.headers) )
+            return False
+
+        if not self.interactive: #in interactive mode, skip the status text for successful requests, so that the JSON output can easily be piped into another command
+            print colored("POST(command/%s): Sent data: '%s'" % (command_type, str(data)), "green")
+        if self.logtofile:
+            logger.info("POST(command/%s): Sent data: '%s'" % (command_type, str(data)))
+        return True
+
     def filter_operation(self, api_type, query, rdepth=0):
         url = self.api_url + "/filter/" + api_type
         query = "query="+query.encode("UTF-8")
@@ -235,7 +289,7 @@ class OP5(object):
             if self.logtofile:
                 logger.error("GET(filter/%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query))
                 logger.error("GET(filter/%s): got HTTP Response: %s" % (api_type, r.text))
-                logger.debug("GET(%s): HTTP Response headers were: %s" % (api_type, r.headers) )
+                logger.debug("GET(filter/%s): HTTP Response headers were: %s" % (api_type, r.headers) )
             return False
 
         if not self.interactive: #in interactive mode, skip the status text for successful requests, so that the JSON output can easily be piped into another command
