@@ -67,7 +67,10 @@ class OP5(object):
         return self.command_operation(command_type,query)
 
     def filter(self,api_type,query):
-        return self.filter_operation(api_type,query)
+        return self.operation_querystring("/filter/query/"+api_type,query)
+
+    def report(self,query):
+        return self.operation_querystring("/report/event",query)
 
     def create(self,object_type,data_dict):
         return self.operation("POST",object_type,data=data_dict)
@@ -245,9 +248,10 @@ class OP5(object):
             logger.info("POST(command/%s): Sent data: '%s'" % (command_type, str(data)))
         return True
 
-    def filter_operation(self, api_type, query, rdepth=0):
-        url = self.api_url + "/filter/" + api_type
-        query = "query="+query.encode("UTF-8")
+    def operation_querystring(self, api_type, query, rdepth=0):
+        url = self.api_url + api_type
+        if api_type.startswith("/filter"):
+            query = "query="+query
 
         if self.debug or self.dryrun:
             text = "GET" + " " + url
@@ -259,7 +263,7 @@ class OP5(object):
         http_headers = {'content-type': 'application/json'}
 
         try:
-            r = requests.get(url, auth=(self.api_username, self.api_password), params=query, headers=http_headers, timeout=10)
+            r = requests.get(url, auth=(self.api_username, self.api_password), params=query.encode("UTF-8"), headers=http_headers, timeout=10)
         except Exception as e:
             self.data = str(e)
             import pprint; pprint.pprint(e)
@@ -284,18 +288,18 @@ class OP5(object):
 
         if r.status_code != 200: #200 OK
             #e.g. 400 Bad request (e.g. required fields not set), 409 Conflict (e.g. something prevents it), 401 Unauthorized, 403 Forbidden, 404 Not Found, 405 Method Not Allowed
-            print colored("GET(filter/%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query), "red")
-            print colored("GET(filter/%s): got HTTP Response: %s" % (api_type, r.text), "red")
+            print colored("GET(%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query), "red")
+            print colored("GET(%s): got HTTP Response: %s" % (api_type, r.text), "red")
             if self.logtofile:
-                logger.error("GET(filter/%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query))
-                logger.error("GET(filter/%s): got HTTP Response: %s" % (api_type, r.text))
-                logger.debug("GET(filter/%s): HTTP Response headers were: %s" % (api_type, r.headers) )
+                logger.error("GET(%s): got HTTP Status Code %d %s. Query string: %s" % (api_type, r.status_code, r.reason, query))
+                logger.error("GET(%s): got HTTP Response: %s" % (api_type, r.text))
+                logger.debug("GET(%s): HTTP Response headers were: %s" % (api_type, r.headers) )
             return False
 
         if not self.interactive: #in interactive mode, skip the status text for successful requests, so that the JSON output can easily be piped into another command
-            print colored("GET(filter/%s): Query string: '%s'" % (api_type, query), "green")
+            print colored("GET(%s): Query string: '%s'" % (api_type, query), "green")
         if self.logtofile:
-            logger.info("GET(filter/%s): Query string: '%s'" % (api_type, query))
+            logger.info("GET(%s): Query string: '%s'" % (api_type, query))
         return True
 
     #CRUD: create, read, update, delete [, and overwrite]
