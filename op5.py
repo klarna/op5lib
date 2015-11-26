@@ -25,7 +25,7 @@ logger.addHandler(NullHandler())
 
 class OP5(object):
 
-    def __init__(self, api_url, api_username, api_password, dryrun=False, debug=False, logtofile=False, interactive=False):
+    def __init__(self, api_url, api_username, api_password, dryrun=False, debug=False, logtofile=False, interactive=False, max_retries=3, retry_wait=6):
         self.api_url = api_url
         self.api_username = api_username
         self.api_password = api_password
@@ -35,6 +35,8 @@ class OP5(object):
         self.data = []
         self.status_code = -1
         self.logtofile = logtofile
+        self.max_retries = max_retries
+        self.retry_wait = retry_wait
         self.modified = False
 
     def get_debug_text(self,request_type,object_type,name,data):
@@ -355,9 +357,9 @@ class OP5(object):
             self.data = r.text
             if r.status_code == 509:
               rdepth+=1
-              if rdepth < 3:
+              if rdepth < self.max_retries:
                   print colored("ERROR: OP5 internal sanity protections activated. Waiting for a while before trying again..","red")
-                  time.sleep(6)
+                  time.sleep(self.retry_wait)
                   return self.operation(request_type,object_type,name,data,rdepth)
               else:
                   raise RuntimeError("Bailing out after 3 retries on HTTP 509 OP5 Sanity Protection Error")
@@ -378,11 +380,11 @@ class OP5(object):
             return False
         elif r.status_code == 500: #500 Internal Error
             rdepth+=1
-            if rdepth < 3:
+            if rdepth < self.max_retries:
                 json_obj = json.loads(r.text)
                 if json_obj['error'] == "Export failed" and json_obj['full_error']['type'] == "nothing to do":
                     return False
-                time.sleep(6)
+                time.sleep(self.retry_wait)
                 return self.operation(request_type,object_type,name,data,rdepth)
             else:
                 raise RuntimeError("Bailing out after 3 retries on HTTP 500 Internal Error")
