@@ -69,7 +69,7 @@ class OP5(object):
         return self.command_operation(command_type,query)
 
     def filter(self,api_type,query):
-        return self.operation_querystring("/filter/query/"+api_type,query)
+        return self.operation_querystring("/filter/"+api_type,query)
 
     def report(self,query):
         return self.operation_querystring("/report/event",query)
