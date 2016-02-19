@@ -320,7 +320,7 @@ class OP5(object):
             return False
 
         # a little extra code here to fix the service name when referring to a hostgroup in the URL
-        if (request_type in ["PATCH","PUT","DELETE"] or (request_type == "GET" and name != "")) and object_type == "service":
+        if (request_type in ["PATCH","PUT","DELETE"] or (request_type == "GET" and name != "")) and object_type == "service" and self.debug:
             print "INFO: Checking if the given name is a hostgroup first."
             if self.read("hostgroup",name.split(";")[0]):
                 name += "?parent_type=hostgroup"
