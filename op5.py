@@ -178,7 +178,9 @@ class OP5(object):
             return False
 
         if object_type != "change":
-            valid_object_types = ["host","hostgroup","service","servicegroup","contact","contactgroup","host_template","service_template","contact_template","hostdependency","servicedependency","hostescalation","serviceescalation","user","usergroup","combined_graph","graph_collection","graph_template","management_pack","timeperiod"]
+            valid_object_types = ["host","hostgroup","service","servicegroup","contact","contactgroup","host_template","service_template",
+                                  "contact_template","hostdependency","servicedependency","hostescalation","serviceescalation","user","usergroup",
+                                  "combined_graph","graph_collection","graph_template","management_pack","timeperiod"]
             if object_type not in valid_object_types:
                 print colored("%s(%s): Invalid object type! name:'%s' data: %s" % (request_type, object_type, name, str(data) ), "red")
                 return False
