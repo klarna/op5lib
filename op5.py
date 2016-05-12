@@ -139,6 +139,7 @@ class OP5(object):
         # Sublists denote that either of the values need to be present, but not both
         required_properties = {}
         required_properties["command"]           = ["command_line", "command_name"];
+        required_properties["contact"]           = ["alias", "contact_name"];
         required_properties["default"]           = [["name", object_type+"_name"]];
         required_properties["graph_template"]    = ["check"];
         required_properties["hostdependency"]    = ["dependent_host_name", "host_name"];
