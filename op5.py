@@ -138,6 +138,8 @@ class OP5(object):
     def validate_object(self,request_type,object_type,data):
         # Sublists denote that either of the values need to be present, but not both
         required_properties = {}
+        required_properties["command"]           = ["command_line", "command_name"];
+        required_properties["contact"]           = ["alias", "contact_name"];
         required_properties["default"]           = [["name", object_type+"_name"]];
         required_properties["graph_template"]    = ["check"];
         required_properties["hostdependency"]    = ["dependent_host_name", "host_name"];
@@ -178,7 +180,9 @@ class OP5(object):
             return False
 
         if object_type != "change":
-            valid_object_types = ["host","hostgroup","service","servicegroup","contact","contactgroup","host_template","service_template","contact_template","hostdependency","servicedependency","hostescalation","serviceescalation","user","usergroup","combined_graph","graph_collection","graph_template","management_pack","timeperiod"]
+            valid_object_types = ["host","hostgroup","service","servicegroup","contact","contactgroup","host_template","service_template",
+                                  "contact_template","hostdependency","servicedependency","hostescalation","serviceescalation","user","usergroup",
+                                  "combined_graph","graph_collection","graph_template","management_pack","timeperiod","command"]
             if object_type not in valid_object_types:
                 print colored("%s(%s): Invalid object type! name:'%s' data: %s" % (request_type, object_type, name, str(data) ), "red")
                 return False
@@ -403,4 +407,3 @@ class OP5(object):
         elif object_type == "change" and (request_type in ["POST","DELETE"] or (request_type == "GET" and len(self.data) == 0)):
             self.modified = False #reset the modified flag after a successful commit, or after understanding that there is nothing to commit
         return True
-
