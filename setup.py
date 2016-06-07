@@ -8,7 +8,7 @@ except ImportError:
 
 setup(
     name='op5lib',
-    version='0.1',
+    version='0.1.1',
     author='Ozan Safi',
     author_email='ozansafi@gmail.com',
     py_modules=['op5'],
@@ -18,4 +18,3 @@ setup(
         "termcolor>=1.1.0",
     ],
 )
-
