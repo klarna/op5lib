@@ -1,6 +1,9 @@
 # CHANGELOG for op5lib
-You should follow the [keepachangelog](http://keepachangelog.com/) format - basically, copy+paste :)
+Please follow the [keepachangelog](http://keepachangelog.com/) format for this file.
 
-## 0.1.1 (2016-06-07)
-* [David Resnick] - Fix updating int properties
-                    Add CHANGELOG
+## [0.1.1] - 2016-06-07
+### Added
+- CHANGELOG added
+
+### Fixed
+- Properties of type 'int' can now be updated.
