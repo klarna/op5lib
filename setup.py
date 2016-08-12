@@ -8,7 +8,7 @@ except ImportError:
 
 setup(
     name='op5lib',
-    version='0.1.1',
+    version='1.0',
     author='Ozan Safi',
     author_email='ozansafi@gmail.com',
     py_modules=['op5'],
