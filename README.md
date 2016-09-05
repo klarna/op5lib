@@ -18,9 +18,9 @@ Pitfalls
 
 These last two issues are because of the following bugs among potential others.
 
-https://bugs.op5.com/view.php?id=9671
+https://jira.op5.com/browse/MON-7477 (fixed in op5 Monitor 7.1.0)
 
-https://bugs.op5.com/view.php?id=9672
+https://jira.op5.com/browse/MON-7500 (fixed in op5 Monitor 7.1.8)
 
 Contributing
 ------------
