@@ -25,7 +25,7 @@ logger.addHandler(NullHandler())
 
 class OP5(object):
 
-    def __init__(self, api_url, api_username, api_password, dryrun=False, debug=False, logtofile=False, interactive=False, max_retries=3, retry_wait=6):
+    def __init__(self, api_url, api_username, api_password, dryrun=False, debug=False, logtofile=False, interactive=False, max_retries=3, retry_wait=6, verify_certificates=True):
         self.api_url = api_url
         self.api_username = api_username
         self.api_password = api_password
@@ -38,6 +38,7 @@ class OP5(object):
         self.max_retries = max_retries
         self.retry_wait = retry_wait
         self.modified = False
+        self.verify_certificates = verify_certificates
 
     def get_debug_text(self,request_type,object_type,name,data):
         #name will always be set except in the "create" case where everything is in "data"
@@ -218,7 +219,7 @@ class OP5(object):
         http_headers = {'content-type': 'application/json'}
 
         try:
-            r = requests.post(url, auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10)
+            r = requests.post(url, auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10, verify=self.verify_certificates)
         except Exception as e:
             self.data = str(e)
             import pprint; pprint.pprint(e)
@@ -271,7 +272,7 @@ class OP5(object):
         http_headers = {'content-type': 'application/json'}
 
         try:
-            r = requests.get(url, auth=(self.api_username, self.api_password), params=query.encode("UTF-8"), headers=http_headers, timeout=10)
+            r = requests.get(url, auth=(self.api_username, self.api_password), params=query.encode("UTF-8"), headers=http_headers, timeout=10, verify=self.verify_certificates)
         except Exception as e:
             self.data = str(e)
             import pprint; pprint.pprint(e)
@@ -346,7 +347,7 @@ class OP5(object):
         http_headers={'content-type': 'application/json'}
 
         try:
-            r = getattr(requests,request_type.lower()) (url,auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10)
+            r = getattr(requests,request_type.lower()) (url,auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10, verify=self.verify_certificates)
         except Exception as e:
             self.data = str(e)
             import pprint; pprint.pprint(e)
