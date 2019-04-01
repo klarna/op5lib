@@ -1,4 +1,4 @@
-from urllib import quote
+from urllib import quote, quote_plus
 import requests #pip install requests
 import json
 
@@ -8,6 +8,43 @@ import sys
 
 import logging
 logger = logging.getLogger("op5")
+
+# This piece of code was mainly created by https://github.com/klarna/op5lib
+# and adapted to SHKB's needs
+
+# define a function for a yes no question to the user
+# stolen from https://stackoverflow.com/questions/3041986/apt-command-line-interface-like-yes-no-input
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = raw_input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
 
 class NullHandler(logging.Handler):
     """
@@ -25,6 +62,48 @@ logger.addHandler(NullHandler())
 
 class OP5(object):
 
+    """
+    Provides an abstraction layer for the op5 api.
+
+    Attributes:
+        api_url:                The url your op5 api is located at. Should be something like "https://op5.mydomain/api"
+        api_username:           The username of a user that has permissions to use the api
+        api_password:           Password that matches for the api_username
+        dryrun:                 Only show what would be done but don't actually do it
+        debug:                  Show some extra debug output
+        interactive:            ?
+        data:                   ?
+        status_code:            ?
+        logtofile:              ?
+        max_retries:            How many times an api call should be retried
+        retry_wait:             The period to wait between retries
+        modified:               ?
+        verify_certificates:    Verify the certificates delivered by your op5 api endpoint
+    """
+
+    # This will help create services
+    # You will only have to assign values to:
+    # check_command, check_command_args, host_name and service_description
+    DEFAULT_SERVICE_DATA = {
+        "check_command": "",
+	"check_command_args": "",
+	"check_interval": 2,
+	"check_period": "24x7",
+	"file_id": "etc/services.cfg",
+	"host_name": "",
+	"max_check_attempts": 3,
+	"notification_interval": 0,
+	"notification_options": [
+	    "c",
+	    "r",
+	    "w"
+	],
+	"notification_period": "13x5",
+	"retry_interval": 2,
+	"service_description": "",
+	"template": "default-service",
+    }
+
     def __init__(self, api_url, api_username, api_password, dryrun=False, debug=False, logtofile=False, interactive=False, max_retries=3, retry_wait=6, verify_certificates=True):
         self.api_url = api_url
         self.api_username = api_username
@@ -39,6 +118,7 @@ class OP5(object):
         self.retry_wait = retry_wait
         self.modified = False
         self.verify_certificates = verify_certificates
+
 
     def get_debug_text(self,request_type,object_type,name,data):
         #name will always be set except in the "create" case where everything is in "data"
@@ -67,45 +147,171 @@ class OP5(object):
             return "%s(%s) data: %s" % (request_type,object_type,data)
 
     def command(self,command_type,query):
+        """
+        Submit an op5 command
+
+        Parameters:
+            command_type: Should be one of:
+                * ACKNOWLEDGE_HOST_PROBLEM
+                * ACKNOWLEDGE_SVC_PROBLEM
+                * PROCESS_HOST_CHECK_RESULT
+                * PROCESS_SERVICE_CHECK_RESULT
+                * SCHEDULE_AND_PROPAGATE_HOST_DOWNTIME
+                * SCHEDULE_AND_PROPAGATE_TRIGGERED_HOST_DOWNTIME
+                * SCHEDULE_HOST_CHECK
+                * SCHEDULE_HOST_DOWNTIME
+                * SCHEDULE_SVC_CHECK
+                * SCHEDULE_SVC_DOWNTIME
+            query:  json of the parameters needed for each command. Be aware that most of the commands require different paramters
+
+        Returns: Boolean: True if successful, False if not
+        """
         return self.command_operation(command_type,query)
 
-    def filter(self,api_type,query):
-        return self.operation_querystring("/filter/"+api_type,query)
+    def filter(self,filter_type,query):
+        """
+        Send a filter request to op5
+
+        Parameters:
+            filter_type: 
+                Should be one of:
+                    * count
+                    * query
+            query:
+                The query string. Be aware of the correct usage of quotes.
+                Example: '[hosts] name = "HOSTNAME"'
+
+        Returns:
+            json of the query result
+        """
+        return self.operation_querystring("/filter/"+filter_type,query)
 
     def report(self,query):
         return self.operation_querystring("/report/event",query)
 
-    def create(self,object_type,data_dict):
+    # define a method for bulk operations
+    # This is needed as op5 gets unresponsive if too many operations take place at a time
+    # therefore we should limit the amount of operations and cut bulks into slices
+    def bulk_operation(self, api_method, object_list, slice_size):
+        """
+        Do an api_method as safe bulk operation.
+
+        Parameters:
+            api_method:     the method intended to run.
+            object_list:    A list of dictionaries each containing the key:values of all arguments required for api_method
+            slice_size:     The slice size defines how many operations should be executed before a persistence call is made
+
+        This is actually only impemented on the delete() and create() methods
+        """
+
+        # we need to follow the index to know when a slice was filled
+        for index, kwargs in enumerate(object_list):
+            api_method(**kwargs)
+            
+            if index > 0 and index % slice_size == 0:
+                self.commit_changes(force=True)
+
+        self.commit_changes(force=True)
+        
+
+    def create(self,object_type,data_dict, *args, **kwargs):
+        """
+        Creates a new object. You should consolidate the op5 api documentation to know about requiered params for each object type.
+
+        Parameters:
+            object_type:
+                * service
+                * host
+                * ...
+            data_dict:
+                dictionary with all needed parameters for the object which should be created
+
+        Here is an example for a new service object:
+
+            data_dict = {
+                "check_command": "check_snmpif_status_v2",
+                "check_command_args": "'snmp_community'!210!c",
+                "check_interval": 2,
+                "check_period": "24x7",
+                "file_id": "etc/services.cfg",
+                "host_name": "SWITCH1",
+                "max_check_attempts": 3,
+                "notification_interval": 0,
+                "notification_options": [
+                    "c", 
+                    "r", 
+                    "w"
+                ],
+                "notification_period": "13x5",
+                "retry_interval": 2,
+                "service_description": "Interface xy Status",
+                "template": "default-service",
+            }
+            
+            create("service", data_dict)
+
+        """
         return self.operation("POST",object_type,data=data_dict)
 
     def read(self,object_type,name):
+        """
+        Do a GET operation on an op5 object
+
+        Parameters:
+            object_type:
+                Defines the type of object to be called. For details see your api documentation. Examples:
+                    * service
+                    * host
+                    * hostgroup
+                    * timeperiod
+                    * host_template
+                    * ....
+            name:
+                The name of the object. For a service this should be "<hostname>;<service name>"
+                Example:
+                    "myhost.my.domain;ping"
+
+        Returns:
+            json of the queried object
+        """
         return self.operation("GET",object_type,name)
 
     def update(self,object_type,name,data):
         return self.operation("PATCH",object_type,name,data)
 
-    def delete(self,object_type,name):
+    def delete(self,object_type,name,*args, **kwargs):
         return self.operation("DELETE",object_type,name)
 
     def overwrite(self,object_type,name,data):
         return self.operation("PUT",object_type,name,data)
 
     def get_changes(self):
+        """
+        Displays staged changes. You will have to call commit_changes() to make those persistent.
+        """
         return self.operation("GET","change")
 
     def undo_changes(self):
         return self.operation("DELETE","change")
 
     def commit_changes(self, force=False):
+        """
+        Displays staged changes and commits them. This is required to make changes persistent at op5.
+        """
         fname = sys._getframe().f_code.co_name
-        if not self.modified and not force:
-            if self.debug:
-                print colored("%s(): Not attempting commit since nothing has been modified" % fname, "yellow")
-            return False
 
-        self.get_changes()
-        if len(self.data) > 0: #there are changes to commit
-            return self.operation("POST","change")
+        staged_changes = self.get_changes()
+        if len(staged_changes) > 0: #there are changes to commit
+            print colored("This is a list of staged changes:", "red")
+            print(json.dumps(staged_changes, indent=4))
+            if force:
+              print(colored("committing changes...", "white"))
+              return self.operation("POST","change")
+            elif query_yes_no("Shall I commit those changes?", default="no"):
+                return self.operation("POST","change")
+            else:
+                print("Ok, maybe next time")
+                return False
         else:
             print colored("%s(): Not attempting commit since nothing has been modified on the server" % fname, "red")
             return False
@@ -207,6 +413,25 @@ class OP5(object):
         return True
 
     def command_operation(self, command_type, data, rdepth=0):
+        """
+        Submit an op5 command
+
+        Parameters:
+            command_type: Should be one of:
+                * ACKNOWLEDGE_HOST_PROBLEM
+                * ACKNOWLEDGE_SVC_PROBLEM
+                * PROCESS_HOST_CHECK_RESULT
+                * PROCESS_SERVICE_CHECK_RESULT
+                * SCHEDULE_AND_PROPAGATE_HOST_DOWNTIME
+                * SCHEDULE_AND_PROPAGATE_TRIGGERED_HOST_DOWNTIME
+                * SCHEDULE_HOST_CHECK
+                * SCHEDULE_HOST_DOWNTIME
+                * SCHEDULE_SVC_CHECK
+                * SCHEDULE_SVC_DOWNTIME
+            query:  json of the parameters needed for each command. Be aware that most of the commands require different paramters
+
+        Returns: Boolean: True if successful, False if not
+        """
         url = self.api_url + "/command/" + command_type
 
         if self.debug or self.dryrun:
@@ -260,7 +485,7 @@ class OP5(object):
     def operation_querystring(self, api_type, query, rdepth=0):
         url = self.api_url + api_type
         if api_type.startswith("/filter"):
-            query = "query="+query
+            params = {"format": "json", "query": query}
 
         if self.debug or self.dryrun:
             text = "GET" + " " + url
@@ -272,7 +497,7 @@ class OP5(object):
         http_headers = {'content-type': 'application/json'}
 
         try:
-            r = requests.get(url, auth=(self.api_username, self.api_password), params=query.encode("UTF-8"), headers=http_headers, timeout=10, verify=self.verify_certificates)
+            r = requests.get(url, auth=(self.api_username, self.api_password), params=params, headers=http_headers, timeout=10, verify=self.verify_certificates)
         except Exception as e:
             self.data = str(e)
             import pprint; pprint.pprint(e)
@@ -280,7 +505,7 @@ class OP5(object):
 
         if self.debug:
             print r.status_code
-            print r.text
+            print json.dumps(r.json(), indent=4)
             print r.headers
 
         try:
@@ -309,7 +534,7 @@ class OP5(object):
             print colored("GET(%s): Query string: '%s'" % (api_type, query), "green")
         if self.logtofile:
             logger.info("GET(%s): Query string: '%s'" % (api_type, query))
-        return True
+        return r.json()
 
     #CRUD: create, read, update, delete [, and overwrite]
     #INPUTS:
@@ -320,6 +545,8 @@ class OP5(object):
     #boolean indicating success/failure of operation
     #the response JSON text is loaded into a JSON object and put into self.data
     #the http status code is put into self.status_code
+    # TODO:
+    # make delete safe, so it is possible to delete objects with '/'
     def operation(self,request_type,object_type,name="",data=None,rdepth=0):
         url = self.api_url + "/config/" + object_type
 
@@ -347,7 +574,7 @@ class OP5(object):
         http_headers={'content-type': 'application/json'}
 
         try:
-            r = getattr(requests,request_type.lower()) (url,auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=10, verify=self.verify_certificates)
+            r = getattr(requests,request_type.lower()) (url,auth=(self.api_username, self.api_password), data=json.dumps(data), headers=http_headers, timeout=600, verify=self.verify_certificates)
         except Exception as e:
             self.data = str(e)
             import pprint; pprint.pprint(e)
@@ -409,4 +636,4 @@ class OP5(object):
             self.modified = True
         elif object_type == "change" and (request_type in ["POST","DELETE"] or (request_type == "GET" and len(self.data) == 0)):
             self.modified = False #reset the modified flag after a successful commit, or after understanding that there is nothing to commit
-        return True
+        return r.json()
